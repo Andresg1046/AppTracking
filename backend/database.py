@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://username:password@localhost/vehicle_tracking")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost/vehicle_tracking")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

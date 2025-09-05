@@ -1,18 +1,16 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from typing import List, Dict
-import json
 import jwt
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
 from database import get_db, engine
-from models import Base, User, Vehicle, Location, Delivery
-from schemas import UserCreate, UserLogin, LocationCreate, DeliveryCreate
-from auth import create_access_token, get_current_user, verify_password, get_password_hash
+from models import Base, User, Role
+from schemas import UserCreate, UserLogin, TokenResponse, UserResponse, RoleResponse
+from auth import create_access_token, verify_password, get_password_hash
+from migrations import run_migrations, get_database_info
 
 load_dotenv()
 
@@ -27,32 +25,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
-
-# WebSocket connection manager
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(message)
-            except:
-                pass
-
-manager = ConnectionManager()
+# Ejecutar migraciones automáticamente al iniciar
+print("🔄 Ejecutando migraciones de BD...")
+run_migrations()
+print("✅ Migraciones completadas")
 
 # Authentication endpoints
 @app.post("/register")
@@ -61,17 +37,46 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Verificar si es el primer usuario (será admin)
+    user_count = db.query(User).count()
+    
+    if user_count == 0:
+        # Primer usuario - asignar rol admin
+        admin_role = db.query(Role).filter(Role.name == "admin").first()
+        if not admin_role:
+            admin_role = Role(name="admin", description="Administrator role")
+            db.add(admin_role)
+            db.commit()
+        role_id = admin_role.id
+    else:
+        # Usuarios siguientes - asignar rol driver
+        driver_role = db.query(Role).filter(Role.name == "driver").first()
+        if not driver_role:
+            driver_role = Role(name="driver", description="Driver role")
+            db.add(driver_role)
+            db.commit()
+        role_id = driver_role.id
+    
     hashed_password = get_password_hash(user.password)
     db_user = User(
         email=user.email,
         hashed_password=hashed_password,
         full_name=user.full_name,
-        role=user.role
+        phone=user.phone,
+        role_id=role_id
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return {"message": "User created successfully"}
+    
+    # Obtener el nombre del rol
+    role_name = db.query(Role).filter(Role.id == role_id).first().name
+    
+    return {
+        "message": "User created successfully",
+        "role": role_name,
+        "is_first_user": user_count == 0
+    }
 
 @app.post("/login")
 def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
@@ -83,82 +88,44 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Actualizar last_login
+    user.last_login = datetime.utcnow()
+    db.commit()
+    
     access_token = create_access_token(data={"sub": user.email})
     return {
         "access_token": access_token,
         "token_type": "bearer",
+        "expires_in": 1800,
         "user": {
             "id": user.id,
             "email": user.email,
             "full_name": user.full_name,
-            "role": user.role
+            "phone": user.phone,
+            "role": user.role.name if user.role else None,
+            "is_active": user.is_active
         }
     }
 
-# Location tracking endpoints
-@app.post("/location")
-def update_location(
-    location: LocationCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    # Save location to database
-    db_location = Location(
-        user_id=current_user.id,
-        latitude=location.latitude,
-        longitude=location.longitude,
-        timestamp=datetime.utcnow()
-    )
-    db.add(db_location)
-    db.commit()
-    
-    # Broadcast to all connected clients
-    location_data = {
-        "type": "location_update",
-        "user_id": current_user.id,
-        "user_name": current_user.full_name,
-        "latitude": location.latitude,
-        "longitude": location.longitude,
-        "timestamp": datetime.utcnow().isoformat()
-    }
-    
-    # This will be sent via WebSocket
-    return {"message": "Location updated successfully"}
-
-@app.get("/locations/{user_id}")
-def get_user_locations(
-    user_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    locations = db.query(Location).filter(Location.user_id == user_id).order_by(Location.timestamp.desc()).limit(100).all()
-    return locations
-
 @app.get("/users")
-def get_users(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    users = db.query(User).filter(User.role == "driver").all()
+def get_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
     return users
 
-# WebSocket endpoint for real-time updates
-@app.websocket("/ws/{token}")
-async def websocket_endpoint(websocket: WebSocket, token: str):
-    await manager.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            # Handle incoming messages if needed
-            await manager.broadcast(data)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
+@app.get("/roles")
+def get_roles(db: Session = Depends(get_db)):
+    roles = db.query(Role).all()
+    return roles
+
+@app.get("/health")
+def health_check():
+    """Endpoint para verificar el estado de la aplicación y BD"""
+    db_info = get_database_info()
+    return {
+        "status": "healthy",
+        "database": db_info,
+        "message": "API funcionando correctamente"
+    }
 
 if __name__ == "__main__":
     import uvicorn
