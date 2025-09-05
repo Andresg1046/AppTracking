@@ -36,7 +36,7 @@ cd backend
 
 2. **Crear entorno virtual:**
 ```bash
-python -m venv venv
+python3 -m venv venv
 ```
 
 3. **Activar entorno virtual:**
@@ -65,7 +65,7 @@ pip install -r requirements.txt
 
 7. **Ejecutar el servidor:**
 ```bash
-python main.py
+python3 main.py
 ```
 
 El backend estará disponible en `http://localhost:8000`
