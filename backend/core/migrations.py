@@ -3,9 +3,11 @@ Sistema de migraciones automático
 Se ejecuta al iniciar la aplicación para crear/actualizar la BD
 """
 from sqlalchemy.orm import Session
-from database import engine, SessionLocal
-from models import Base, Role, User
-from auth import get_password_hash
+from core.database import engine, SessionLocal, Base
+from features.users.models import User
+from features.roles.models import Role
+from features.auth.models import PasswordReset
+from core.security import get_password_hash
 import logging
 
 logger = logging.getLogger(__name__)

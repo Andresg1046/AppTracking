@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
-from database import get_db
-from models import User
+from core.database import get_db
+from features.users.models import User
 
 load_dotenv()
 

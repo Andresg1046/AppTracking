@@ -1,246 +1,186 @@
-# Vehicle Tracking Backend API
+# 🚀 Vehicle Tracking Backend
 
-Un sistema robusto de seguimiento de vehículos con autenticación completa, seguridad avanzada y escalabilidad optimizada.
+API backend para aplicación móvil de seguimiento de vehículos con sistema de autenticación completo.
 
-## Características Principales
-
-### Seguridad
-- **Autenticación JWT** con tokens de acceso y refresh
-- **Rate Limiting** para prevenir ataques de fuerza bruta
-- **Bloqueo de cuentas** después de intentos fallidos
-- **Logging de seguridad** completo
-- **Headers de seguridad** HTTP
-- **Validación de contraseñas** con políticas estrictas
-
-### Rendimiento y Escalabilidad
-- **Índices de base de datos** optimizados
-- **Constraints de integridad** de datos
-- **Conexiones de base de datos** eficientes
-- **Middleware de logging** estructurado
-- **WebSocket** para actualizaciones en tiempo real
-
-### Arquitectura Sólida
-- **Principios SOLID** aplicados
-- **Separación de responsabilidades**
-- **Inyección de dependencias**
-- **Migraciones de base de datos** con Alembic
-- **Configuración por variables de entorno**
-
-## Instalación
-
-### Prerrequisitos
-- Python 3.8+
-- PostgreSQL 12+
-- pip
-
-### 1. Clonar y configurar el entorno
-
-```bash
-# Navegar al directorio backend
-cd backend
-
-# Crear entorno virtual
-python -m venv venv
-
-# Activar entorno virtual
-# En Windows:
-venv\\Scripts\\activate
-# En Linux/Mac:
-source venv/bin/activate
-
-# Instalar dependencias
-pip install -r requirements.txt
-```
-
-### 2. Configurar variables de entorno
-
-```bash
-# Copiar archivo de ejemplo
-cp env_example.txt .env
-
-# Editar .env con tus configuraciones
-```
-
-**Variables importantes:**
-```env
-# Base de datos
-DATABASE_URL=postgresql://postgres:password@172.16.1.116/tracking
-
-# Seguridad
-SECRET_KEY=tu-clave-secreta-super-segura-aqui
-ADMIN_PASSWORD=Admin123!
-
-# Configuración de la aplicación
-DEBUG=True
-LOG_LEVEL=INFO
-```
-
-### 3. Configurar la base de datos
-
-```bash
-# Opción 1: Inicialización automática (recomendado para desarrollo)
-python init_db.py
-
-# Opción 2: Usar migraciones (recomendado para producción)
-python create_migration.py
-alembic upgrade head
-```
-
-### 4. Ejecutar la aplicación
-
-```bash
-# Desarrollo
-python main.py
-
-# O con uvicorn directamente
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-
-# Producción
-gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-```
-
-## Estructura del Proyecto
+## 📁 Estructura del Proyecto
 
 ```
 backend/
-├── alembic/                 # Migraciones de base de datos
-├── logs/                    # Archivos de log
-├── auth.py                  # Sistema de autenticación
-├── auth_endpoints.py        # Endpoints de autenticación
-├── database.py              # Configuración de base de datos
-├── models.py                # Modelos SQLAlchemy
-├── schemas.py               # Esquemas Pydantic
-├── security.py              # Middleware de seguridad
-├── logging_config.py        # Configuración de logging
-├── main.py                  # Aplicación principal
-├── init_db.py              # Script de inicialización
-├── create_migration.py      # Script de migración
-├── requirements.txt         # Dependencias
-└── README.md               # Este archivo
+├── app/
+│   ├── __init__.py
+│   └── main.py              # Aplicación principal FastAPI
+├── features/
+│   ├── auth/                # Módulo de autenticación
+│   │   ├── models.py        # Modelos de BD (vacío)
+│   │   ├── schemas.py       # Esquemas de validación
+│   │   ├── routes.py        # Endpoints de auth
+│   │   └── services.py      # Lógica de negocio
+│   ├── users/               # Módulo de usuarios
+│   │   ├── models.py        # Modelo User
+│   │   ├── schemas.py       # Esquemas de usuario
+│   │   ├── routes.py        # Endpoints de usuarios
+│   │   └── services.py      # Servicios de usuario
+│   └── roles/               # Módulo de roles
+│       ├── models.py        # Modelo Role
+│       ├── schemas.py       # Esquemas de rol
+│       ├── routes.py        # Endpoints de roles
+│       └── services.py      # Servicios de rol
+├── core/
+│   ├── database.py         # Configuración de BD
+│   ├── security.py         # JWT y seguridad
+│   └── migrations.py       # Migraciones automáticas
+├── shared/                  # Código compartido
+├── main.py                 # Punto de entrada
+├── requirements.txt        # Dependencias
+├── .env                    # Variables de entorno
+└── env_example.txt         # Ejemplo de configuración
 ```
 
-## API Endpoints
+## 🚀 Instalación y Configuración
 
-### Autenticación
-- `POST /auth/register` - Registrar usuario
-- `POST /auth/login` - Iniciar sesión
-- `POST /auth/refresh` - Renovar token
-- `POST /auth/logout` - Cerrar sesión
-- `GET /auth/me` - Información del usuario actual
-- `PUT /auth/me` - Actualizar perfil
-- `POST /auth/change-password` - Cambiar contraseña
+### 1. Requisitos Previos
+- **Python 3.8+**
+- **PostgreSQL** instalado y corriendo
+- **Git** (opcional)
 
-### Administración
-- `GET /auth/users` - Listar usuarios (admin)
-- `PUT /auth/users/{user_id}` - Actualizar usuario (admin)
+### 2. Configuración del Entorno
 
-### Seguimiento
-- `POST /location` - Actualizar ubicación
-- `GET /locations/{user_id}` - Obtener ubicaciones
-- `WS /ws/{token}` - WebSocket para tiempo real
-
-### Sistema
-- `GET /health` - Estado del sistema
-
-## Seguridad
-
-### Políticas de Contraseñas
-- Mínimo 8 caracteres
-- Al menos una mayúscula
-- Al menos una minúscula
-- Al menos un dígito
-- Al menos un carácter especial
-
-### Rate Limiting
-- 60 requests por minuto por IP
-- 10 requests por segundo (burst)
-- Headers de retry incluidos
-
-### Logging de Seguridad
-- Intentos de login (exitosos y fallidos)
-- Cambios de contraseña
-- Conexiones WebSocket
-- Errores de autenticación
-
-## Base de Datos
-
-### Modelos Principales
-- **User**: Usuarios del sistema (admin/driver)
-- **RefreshToken**: Tokens de renovación
-- **LoginLog**: Registro de intentos de login
-- **Location**: Ubicaciones GPS
-- **Vehicle**: Vehículos
-- **Delivery**: Entregas
-
-### Índices Optimizados
-- Búsquedas por email y estado activo
-- Consultas por rol y estado
-- Ubicaciones por usuario y timestamp
-- Tokens por usuario y expiración
-
-## Desarrollo
-
-### Crear nueva migración
+#### Crear entorno virtual:
 ```bash
-python create_migration.py
+python -m venv venv
 ```
 
-### Ejecutar tests
+#### Activar entorno virtual:
 ```bash
-pytest
+# Windows
+venv\Scripts\activate
+
+# Linux/Mac
+source venv/bin/activate
 ```
 
-### Verificar logs
+#### Instalar dependencias:
 ```bash
-# Logs de aplicación
-tail -f logs/app.log
-
-# Logs de seguridad
-tail -f logs/security.log
-
-# Logs de errores
-tail -f logs/errors.log
+pip install -r requirements.txt
 ```
 
-## Producción
+### 3. Configuración de Base de Datos
 
-### Variables de entorno críticas
+#### Crear archivo `.env`:
+```bash
+# Copiar el ejemplo
+cp env_example.txt .env
+```
+
+#### Editar `.env` con tus datos:
 ```env
-DEBUG=False
-SECRET_KEY=clave-super-secreta-de-produccion
-DATABASE_URL=postgresql://user:pass@host:port/db
-LOG_LEVEL=WARNING
+DATABASE_URL=postgresql://usuario:contraseña@localhost/nombre_bd
+SECRET_KEY=tu-clave-secreta-super-segura
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-### Configuración de servidor
-- Usar HTTPS en producción
-- Configurar proxy reverso (nginx)
-- Monitorear logs de seguridad
-- Backup regular de base de datos
+### 4. Ejecutar la Aplicación
 
-## Monitoreo
+```bash
+python main.py
+```
 
-### Métricas importantes
-- Intentos de login fallidos
-- Rate limiting activado
-- Errores de base de datos
-- Tiempo de respuesta de API
-- Conexiones WebSocket activas
+**¡Eso es todo!** La aplicación se ejecutará automáticamente y:
+- ✅ Creará/actualizará las tablas de BD
+- ✅ Creará los roles por defecto (admin, driver)
+- ✅ Iniciará el servidor en `http://localhost:8000`
 
-### Alertas recomendadas
-- Múltiples intentos de login fallidos
-- Rate limiting frecuente
-- Errores de base de datos
-- Tiempo de respuesta alto
+## 📋 Endpoints Disponibles
 
-## Soporte
+### 🔐 Autenticación (`/auth`)
+- **`POST /auth/register`** - Registro de usuario
+- **`POST /auth/login`** - Inicio de sesión
 
-Para problemas o preguntas:
-1. Revisar logs en `logs/`
-2. Verificar configuración de `.env`
-3. Comprobar conectividad a base de datos
-4. Revisar documentación de FastAPI
+### 👥 Usuarios (`/users`)
+- **`GET /users/`** - Lista todos los usuarios
 
-## Licencia
+### 🎭 Roles (`/roles`)
+- **`GET /roles/`** - Lista todos los roles
 
-Este proyecto está bajo la licencia MIT.
+### 🏥 Sistema (`/`)
+- **`GET /health`** - Estado de la aplicación
+
+## 🧪 Pruebas con Postman/Insomnia
+
+### Registro de Usuario:
+```json
+POST http://localhost:8000/auth/register
+Content-Type: application/json
+
+{
+  "email": "admin@test.com",
+  "password": "admin123",
+  "full_name": "Admin Test",
+  "phone": "1234567890"
+}
+```
+
+### Login:
+```json
+POST http://localhost:8000/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@test.com",
+  "password": "admin123"
+}
+```
+
+## 🔧 Características Técnicas
+
+### Sistema de Roles Automático:
+- **Primer usuario** → Rol `admin`
+- **Usuarios siguientes** → Rol `driver`
+
+### Seguridad:
+- **JWT Tokens** con expiración de 30 minutos
+- **Contraseñas hasheadas** con bcrypt
+- **CORS** configurado para desarrollo
+
+### Migraciones Automáticas:
+- Se ejecutan al iniciar la aplicación
+- Crean tablas y roles por defecto
+- Verifican estructura de BD
+
+## 🐛 Solución de Problemas
+
+### Error: "No module named 'core'"
+```bash
+# Asegúrate de estar en el directorio backend
+cd backend
+python main.py
+```
+
+### Error: "Database connection failed"
+- Verifica que PostgreSQL esté corriendo
+- Revisa la URL de conexión en `.env`
+- Verifica credenciales de la BD
+
+### Error: "Table already exists"
+```bash
+# Recrear BD completamente
+python -c "from core.database import engine; from core.database import Base; Base.metadata.drop_all(bind=engine); Base.metadata.create_all(bind=engine)"
+python main.py
+```
+
+## 📞 Soporte
+
+Si tienes problemas:
+1. Revisa los logs de la aplicación
+2. Verifica la configuración de `.env`
+3. Asegúrate de que PostgreSQL esté corriendo
+4. Ejecuta `python main.py` para diagnóstico completo
+
+## 🚀 Próximos Pasos
+
+- [ ] Implementar logout
+- [ ] Restablecer contraseña
+- [ ] Verificación de email
+- [ ] Límite de intentos de login
+- [ ] Gestión de sesiones
+- [ ] Funcionalidades de admin

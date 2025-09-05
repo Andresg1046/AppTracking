@@ -8,10 +8,6 @@ class UserCreate(BaseModel):
     full_name: str
     phone: str
 
-class UserLogin(BaseModel):
-    email: str
-    password: str
-
 class UserResponse(BaseModel):
     id: int
     email: str
@@ -23,14 +19,3 @@ class UserResponse(BaseModel):
     last_login: Optional[datetime]
     created_at: datetime
     updated_at: datetime
-
-class RoleResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    created_at: datetime
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int

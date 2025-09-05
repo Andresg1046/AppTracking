@@ -1,17 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
-Base = declarative_base()
-
-class Role(Base):
-    __tablename__ = "roles"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    description = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+from core.database import Base
 
 class User(Base):
     __tablename__ = "users"
@@ -28,8 +18,6 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
-    # Relación con roles
+    # Relaciones
     role = relationship("Role", back_populates="users")
-
-# Agregar relación inversa
-Role.users = relationship("User", back_populates="role")
+    sessions = relationship("UserSession", back_populates="user")
