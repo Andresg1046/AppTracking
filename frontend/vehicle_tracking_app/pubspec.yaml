@@ -51,7 +51,7 @@ dependencies:
   web_socket_channel: ^2.4.0
   
   # Local storage
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.3.2
   
   # JWT token handling
   jwt_decoder: ^2.0.1
