@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.database import engine
 from core.migrations import run_migrations, get_database_info
+from core.rate_limiting import rate_limit_middleware
 from features.auth.routes import auth_router
 from features.users.routes import users_router
 from features.roles.routes import roles_router
@@ -17,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting middleware
+app.middleware("http")(rate_limit_middleware)
 
 # Ejecutar migraciones automáticamente al iniciar
 print("🔄 Ejecutando migraciones de BD...")

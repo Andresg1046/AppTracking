@@ -17,6 +17,10 @@ class Settings:
     # Configuración de sesiones
     MAX_SESSIONS_PER_USER = int(os.getenv("MAX_SESSIONS_PER_USER", 3))
     
+    # Configuración de seguridad - límite de intentos de login
+    MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", 5))
+    LOCKOUT_DURATION_MINUTES = int(os.getenv("LOCKOUT_DURATION_MINUTES", 15))
+    
     # Rate limiting
     RATE_LIMIT_REQUESTS_PER_MINUTE = int(os.getenv("RATE_LIMIT_REQUESTS_PER_MINUTE", 60))
     

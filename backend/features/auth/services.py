@@ -4,7 +4,7 @@ import secrets
 import string
 from features.users.models import User
 from features.roles.models import Role
-from features.auth.models import PasswordReset, UserSession, TokenBlacklist
+from features.auth.models import PasswordReset, UserSession, TokenBlacklist, LoginAttempt
 from core.security import verify_password, create_access_token, get_password_hash
 from core.config import settings
 
@@ -122,12 +122,18 @@ class AuthService:
         """Invalida una sesión específica"""
         session = db.query(UserSession).filter(UserSession.id == session_id).first()
         if session:
-            # Agregar token a blacklist
-            blacklist_entry = TokenBlacklist(
-                token=session.access_token,
-                expires_at=session.expires_at
-            )
-            db.add(blacklist_entry)
+            # Verificar si el token ya está en la blacklist
+            existing_blacklist = db.query(TokenBlacklist).filter(
+                TokenBlacklist.token == session.access_token
+            ).first()
+            
+            # Solo agregar a blacklist si no existe
+            if not existing_blacklist:
+                blacklist_entry = TokenBlacklist(
+                    token=session.access_token,
+                    expires_at=session.expires_at
+                )
+                db.add(blacklist_entry)
             
             # Marcar sesión como inactiva
             session.is_active = False
@@ -142,12 +148,19 @@ class AuthService:
         ).all()
         
         for session in sessions:
-            # Agregar token a blacklist
-            blacklist_entry = TokenBlacklist(
-                token=session.access_token,
-                expires_at=session.expires_at
-            )
-            db.add(blacklist_entry)
+            # Verificar si el token ya está en la blacklist
+            existing_blacklist = db.query(TokenBlacklist).filter(
+                TokenBlacklist.token == session.access_token
+            ).first()
+            
+            # Solo agregar a blacklist si no existe
+            if not existing_blacklist:
+                blacklist_entry = TokenBlacklist(
+                    token=session.access_token,
+                    expires_at=session.expires_at
+                )
+                db.add(blacklist_entry)
+            
             session.is_active = False
         
         db.commit()
@@ -184,3 +197,67 @@ class AuthService:
         db.commit()
         
         return new_access_token
+    
+    @staticmethod
+    def invalidate_session_by_token(access_token: str, db: Session):
+        """Invalida una sesión específica por su access token"""
+        session = db.query(UserSession).filter(
+            UserSession.access_token == access_token,
+            UserSession.is_active == True
+        ).first()
+        
+        if session:
+            # Verificar si el token ya está en la blacklist
+            existing_blacklist = db.query(TokenBlacklist).filter(
+                TokenBlacklist.token == access_token
+            ).first()
+            
+            # Solo agregar a blacklist si no existe
+            if not existing_blacklist:
+                blacklist_entry = TokenBlacklist(
+                    token=access_token,
+                    expires_at=session.expires_at
+                )
+                db.add(blacklist_entry)
+            
+            # Marcar sesión como inactiva
+            session.is_active = False
+            db.commit()
+    
+    @staticmethod
+    def record_login_attempt(email: str, ip_address: str, is_successful: bool, db: Session):
+        """Registra un intento de login"""
+        attempt = LoginAttempt(
+            email=email,
+            ip_address=ip_address,
+            is_successful=is_successful
+        )
+        db.add(attempt)
+        db.commit()
+    
+    @staticmethod
+    def is_account_locked(email: str, db: Session) -> bool:
+        """Verifica si una cuenta está bloqueada por intentos fallidos"""
+        # Contar intentos fallidos en los últimos 15 minutos
+        lockout_time = datetime.utcnow() - timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
+        
+        failed_attempts = db.query(LoginAttempt).filter(
+            LoginAttempt.email == email,
+            LoginAttempt.is_successful == False,
+            LoginAttempt.attempted_at > lockout_time
+        ).count()
+        
+        return failed_attempts >= settings.MAX_LOGIN_ATTEMPTS
+    
+    @staticmethod
+    def get_remaining_attempts(email: str, db: Session) -> int:
+        """Obtiene el número de intentos restantes antes del bloqueo"""
+        lockout_time = datetime.utcnow() - timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
+        
+        failed_attempts = db.query(LoginAttempt).filter(
+            LoginAttempt.email == email,
+            LoginAttempt.is_successful == False,
+            LoginAttempt.attempted_at > lockout_time
+        ).count()
+        
+        return max(0, settings.MAX_LOGIN_ATTEMPTS - failed_attempts)

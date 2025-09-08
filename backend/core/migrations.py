@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from core.database import engine, SessionLocal, Base
 from features.users.models import User
 from features.roles.models import Role
-from features.auth.models import PasswordReset
+from features.auth.models import PasswordReset, LoginAttempt
 from core.security import get_password_hash
 import logging
 

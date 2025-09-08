@@ -47,6 +47,16 @@ def get_current_user(
     db: Session = Depends(get_db)
 ):
     token = credentials.credentials
+    
+    # Verificar si el token está en la blacklist
+    from features.auth.services import AuthService
+    if AuthService.is_token_blacklisted(token, db):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     email = verify_access_token(token)
     if email is None:
         raise HTTPException(

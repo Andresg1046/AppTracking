@@ -37,3 +37,12 @@ class TokenBlacklist(Base):
     token = Column(String, unique=True, index=True)
     expires_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, index=True)
+    ip_address = Column(String)
+    is_successful = Column(Boolean, default=False)
+    attempted_at = Column(DateTime(timezone=True), server_default=func.now())
