@@ -12,7 +12,7 @@ class Settings:
     
     # Seguridad JWT
     SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 720))  # Por defecto 12 horas, configurar en .env
     
     # Configuración de sesiones
     MAX_SESSIONS_PER_USER = int(os.getenv("MAX_SESSIONS_PER_USER", 3))

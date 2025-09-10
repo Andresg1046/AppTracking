@@ -21,3 +21,8 @@ class User(Base):
     # Relaciones
     role = relationship("Role", back_populates="users")
     sessions = relationship("UserSession", back_populates="user")
+    
+    # Relaciones con vehículos
+    assigned_vehicles = relationship("Vehicle", foreign_keys="Vehicle.assigned_user_id", back_populates="assigned_user")
+    vehicles_assigned_by_me = relationship("Vehicle", foreign_keys="Vehicle.assigned_by", back_populates="assigned_by_user")
+    vehicles_created = relationship("Vehicle", foreign_keys="Vehicle.created_by", back_populates="creator")

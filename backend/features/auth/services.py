@@ -111,7 +111,7 @@ class AuthService:
             refresh_token=refresh_token,
             device_info=device_info,
             ip_address=ip_address,
-            expires_at=datetime.utcnow() + timedelta(minutes=30)
+            expires_at=datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         )
         db.add(session)
         db.commit()
@@ -193,7 +193,7 @@ class AuthService:
         # Actualizar sesión
         session.access_token = new_access_token
         session.last_used = datetime.utcnow()
-        session.expires_at = datetime.utcnow() + timedelta(minutes=30)
+        session.expires_at = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         db.commit()
         
         return new_access_token

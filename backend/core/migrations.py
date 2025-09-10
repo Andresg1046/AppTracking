@@ -7,6 +7,8 @@ from core.database import engine, SessionLocal, Base
 from features.users.models import User
 from features.roles.models import Role
 from features.auth.models import PasswordReset, LoginAttempt
+from features.vehicles.models import Vehicle
+# No necesitamos modelos de e-commerce para el enfoque proxy
 from core.security import get_password_hash
 import logging
 
@@ -83,10 +85,12 @@ def get_database_info():
     try:
         user_count = db.query(User).count()
         role_count = db.query(Role).count()
+        vehicle_count = db.query(Vehicle).count()
         
         return {
             "users": user_count,
             "roles": role_count,
+            "vehicles": vehicle_count,
             "status": "ready"
         }
     except Exception as e:

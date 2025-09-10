@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.security import get_current_user, security
 from core.utils import format_datetime_for_response
+from core.config import settings
 from features.auth.schemas import UserLogin, TokenResponse, RefreshTokenRequest, ForgotPasswordRequest, ResetPasswordRequest, LogoutResponse
 from features.users.schemas import UserCreate
 from features.auth.services import AuthService
@@ -99,7 +100,7 @@ def login(user_credentials: UserLogin, request: Request, db: Session = Depends(g
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=1800,
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convertir minutos a segundos
         user={
             "id": user.id,
             "email": user.email,
@@ -148,7 +149,7 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
         access_token=new_access_token,
         refresh_token=request.refresh_token,  # El refresh token sigue siendo el mismo
         token_type="bearer",
-        expires_in=1800,
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convertir minutos a segundos
         user={
             "id": user.id,
             "email": user.email,

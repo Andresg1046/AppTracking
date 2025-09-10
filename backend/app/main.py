@@ -6,6 +6,8 @@ from core.rate_limiting import rate_limit_middleware
 from features.auth.routes import auth_router
 from features.users.routes import users_router
 from features.roles.routes import roles_router
+from features.vehicles.routes import vehicles_router
+from features.ecommerce.proxy_routes import proxy_router as ecommerce_router
 
 # Crear aplicación FastAPI
 app = FastAPI(title="Vehicle Tracking API", version="1.0.0")
@@ -31,6 +33,8 @@ print("✅ Migraciones completadas")
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(roles_router, prefix="/roles", tags=["Roles"])
+app.include_router(vehicles_router, prefix="/vehicles", tags=["Vehicles"])
+app.include_router(ecommerce_router, prefix="/ecommerce", tags=["E-commerce"])
 
 # Health check endpoint
 @app.get("/health")

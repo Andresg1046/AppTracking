@@ -11,7 +11,7 @@ DATABASE_URL=postgresql://postgres:S0p0rt3#T3lec0m!2025@172.16.1.116/tracking
 # Seguridad
 SECRET_KEY=dev-secret-key-change-in-production
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+ACCESS_TOKEN_EXPIRE_MINUTES=720
 REFRESH_TOKEN_EXPIRE_DAYS=7
 
 # Configuración de seguridad
@@ -43,6 +43,37 @@ PORT=8000
 
 # Usuario admin por defecto
 ADMIN_PASSWORD=Admin123!
+
+# ===========================================
+# WOOCOMMERCE INTEGRATION
+# ===========================================
+# URL base de tu sitio WooCommerce
+WC_BASE_URL=https://tu-dominio.com/wp-json/wc/v3
+
+# Credenciales de WooCommerce REST API
+# Generar en: WooCommerce > Settings > Advanced > REST API
+WC_CONSUMER_KEY=ck_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+WC_CONSUMER_SECRET=cs_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+# Secretos para webhooks
+WOO_WEBHOOK_SECRET=tu_secreto_webhook_woocommerce
+PAYMENT_WEBHOOK_SECRET=tu_secreto_webhook_pasarela_pago
+
+# ===========================================
+# STRIPE INTEGRATION
+# ===========================================
+# Modo de Stripe: test | live
+STRIPE_MODE=test
+
+# Claves de Stripe (modo test)
+STRIPE_TEST_PUBLISHABLE_KEY=
+STRIPE_TEST_SECRET_KEY=
+STRIPE_TEST_WEBHOOK_SECRET=
+
+# Claves de Stripe (modo live)
+STRIPE_LIVE_PUBLISHABLE_KEY=
+STRIPE_LIVE_SECRET_KEY=
+STRIPE_LIVE_WEBHOOK_SECRET=
 
 # ===========================================
 # CONFIGURACIÓN PARA PRODUCCIÓN:
