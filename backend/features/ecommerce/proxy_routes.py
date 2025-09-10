@@ -35,7 +35,6 @@ async def get_products(
     min_price: Optional[float] = Query(None, description="Precio mínimo"),
     max_price: Optional[float] = Query(None, description="Precio máximo"),
     stock_status: Optional[str] = Query(None, description="Estado de stock"),
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener lista de productos directamente de WooCommerce"""
@@ -71,7 +70,6 @@ async def get_products(
 @proxy_router.get("/products/{product_id}", response_model=ProductResponse)
 async def get_product(
     product_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener un producto específico de WooCommerce"""
@@ -88,7 +86,6 @@ async def get_product(
 @proxy_router.get("/products/{product_id}/variations")
 async def get_product_variations(
     product_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener variaciones de un producto específico"""
@@ -107,7 +104,6 @@ async def get_product_variations(
 @proxy_router.post("/cart/calculate", response_model=CartTotalsResponse)
 async def calculate_cart_totals(
     cart_items: List[dict],
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Calcular totales del carrito sin persistir datos"""
@@ -132,7 +128,6 @@ async def calculate_cart_totals(
 @proxy_router.post("/orders", response_model=OrderResponse)
 async def create_order(
     order_data: OrderCreate,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Crear una nueva orden directamente en WooCommerce"""
@@ -165,17 +160,14 @@ async def get_order(
 
 @proxy_router.get("/orders", response_model=OrderListResponse)
 async def get_customer_orders(
-    customer_id: Optional[int] = Query(None, description="ID del cliente"),
-    email: Optional[str] = Query(None, description="Email del cliente"),
+    email: str = Query(..., description="Email del cliente"),
     page: int = Query(1, ge=1, description="Número de página"),
     per_page: int = Query(20, ge=1, le=100, description="Órdenes por página"),
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener órdenes de un cliente desde WooCommerce"""
     try:
         orders, total = await woo_proxy.get_customer_orders(
-            customer_id=customer_id,
             email=email,
             page=page,
             per_page=per_page
@@ -201,7 +193,6 @@ async def get_customer_orders(
 async def confirm_payment(
     order_id: int,
     payment_data: PaymentConfirm,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Confirmar pago de una orden en WooCommerce"""
@@ -220,7 +211,6 @@ async def confirm_payment(
 @proxy_router.get("/orders/{order_id}/tracking", response_model=TrackingInfo)
 async def get_tracking_info(
     order_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener información de tracking de una orden desde WooCommerce"""
@@ -264,7 +254,6 @@ async def update_tracking(
 @proxy_router.get("/coupons/{coupon_code}")
 async def validate_coupon(
     coupon_code: str,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Validar cupón en WooCommerce"""
@@ -282,7 +271,6 @@ async def validate_coupon(
 
 @proxy_router.get("/categories")
 async def get_categories(
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Obtener categorías de productos desde WooCommerce"""
@@ -302,7 +290,7 @@ async def get_categories(
 async def create_payment_intent(
     amount: float,
     currency: str = "usd",
-    current_user: User = Depends(get_current_user),
+    customer_email: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Crear PaymentIntent para Stripe"""
@@ -325,14 +313,17 @@ async def create_payment_intent(
             )
         
         # Crear PaymentIntent
+        metadata = {
+            "app_source": "mobile"
+        }
+        
+        if customer_email:
+            metadata["customer_email"] = customer_email
+        
         intent = stripe.PaymentIntent.create(
             amount=int(amount * 100),  # Convertir a centavos
             currency=currency,
-            metadata={
-                "user_id": str(current_user.id),
-                "user_email": current_user.email,
-                "app_source": "mobile"
-            }
+            metadata=metadata
         )
         
         return {

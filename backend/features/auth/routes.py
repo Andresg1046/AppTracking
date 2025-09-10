@@ -35,72 +35,44 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @auth_router.post("/login", response_model=TokenResponse)
 def login(user_credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
-    """Inicia sesión de usuario"""
+    """Inicia sesión de usuario - OPTIMIZADO"""
     email = user_credentials.email
     password = user_credentials.password
     
     # Obtener IP del cliente
     client_ip = request.client.host if request.client else "unknown"
     
-    # Primero verificar si el email existe
-    user_exists = UserService.get_user_by_email(email, db) is not None
+    # OPTIMIZACIÓN: Una sola consulta para obtener usuario y verificar bloqueo
+    user, is_locked, remaining_attempts = AuthService.authenticate_user_optimized(email, password, db)
     
-    # Solo aplicar lógica de bloqueo si el usuario existe
-    if user_exists and AuthService.is_account_locked(email, db):
-        remaining_time = 15  # minutos de bloqueo
+    if is_locked:
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
-            detail=f"Account locked due to too many failed attempts. Try again in {remaining_time} minutes.",
+            detail=f"Account locked due to too many failed attempts. Try again in 15 minutes.",
         )
     
-    # Intentar autenticación
-    user = AuthService.authenticate_user(email, password, db)
-    
     if not user:
-        # Solo registrar intento fallido si el usuario existe
-        if user_exists:
-            AuthService.record_login_attempt(email, client_ip, False, db)
-            
-            # Verificar si ahora está bloqueada
-            remaining_attempts = AuthService.get_remaining_attempts(email, db)
-            
-            if remaining_attempts == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_423_LOCKED,
-                    detail="Account locked due to too many failed attempts. Try again in 15 minutes.",
-                )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"Incorrect email or password. {remaining_attempts} attempts remaining.",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+        # Usuario no existe o contraseña incorrecta
+        if remaining_attempts == 0:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Account locked due to too many failed attempts. Try again in 15 minutes.",
+            )
         else:
-            # Email no existe - no registrar intento fallido
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password.",
+                detail=f"Incorrect email or password. {remaining_attempts} attempts remaining.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
     
-    # Registrar intento exitoso
-    AuthService.record_login_attempt(email, client_ip, True, db)
-    
-    # Actualizar last_login
-    AuthService.update_last_login(user, db)
-    
-    # Crear tokens
-    access_token = AuthService.create_token(user)
-    refresh_token = AuthService.create_refresh_token()
-    
-    # Crear sesión
-    AuthService.create_session(user, access_token, refresh_token, db=db)
+    # OPTIMIZACIÓN: Crear tokens y sesión en una sola operación
+    access_token, refresh_token = AuthService.create_tokens_and_session(user, client_ip, db)
     
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convertir minutos a segundos
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user={
             "id": user.id,
             "email": user.email,

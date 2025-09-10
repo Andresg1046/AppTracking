@@ -18,6 +18,87 @@ class AuthService:
         return user
     
     @staticmethod
+    def authenticate_user_optimized(email: str, password: str, db: Session) -> tuple[User, bool, int]:
+        """Autentica un usuario de forma optimizada - Una sola consulta"""
+        from datetime import datetime, timedelta
+        
+        # Obtener usuario con join a role para evitar consultas adicionales
+        user = db.query(User).join(Role, User.role_id == Role.id).filter(User.email == email).first()
+        
+        if not user:
+            # Usuario no existe - no registrar intento fallido
+            return None, False, 0
+        
+        # Verificar bloqueo antes de verificar contraseña
+        lockout_time = datetime.utcnow() - timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
+        failed_attempts = db.query(LoginAttempt).filter(
+            LoginAttempt.email == email,
+            LoginAttempt.is_successful == False,
+            LoginAttempt.attempted_at > lockout_time
+        ).count()
+        
+        is_locked = failed_attempts >= settings.MAX_LOGIN_ATTEMPTS
+        remaining_attempts = max(0, settings.MAX_LOGIN_ATTEMPTS - failed_attempts)
+        
+        if is_locked:
+            return None, True, 0
+        
+        # Verificar contraseña
+        if not verify_password(password, user.hashed_password):
+            # Registrar intento fallido
+            attempt = LoginAttempt(
+                email=email,
+                ip_address="unknown",  # Se actualizará después
+                is_successful=False
+            )
+            db.add(attempt)
+            db.commit()
+            
+            # Recalcular intentos restantes
+            new_failed_attempts = failed_attempts + 1
+            new_remaining_attempts = max(0, settings.MAX_LOGIN_ATTEMPTS - new_failed_attempts)
+            
+            return None, False, new_remaining_attempts
+        
+        return user, False, remaining_attempts
+    
+    @staticmethod
+    def create_tokens_and_session(user: User, client_ip: str, db: Session) -> tuple[str, str]:
+        """Crea tokens y sesión en una sola operación optimizada"""
+        from datetime import datetime, timedelta
+        
+        # Crear tokens
+        access_token = AuthService.create_token(user)
+        refresh_token = AuthService.create_refresh_token()
+        
+        # Actualizar last_login
+        user.last_login = datetime.utcnow()
+        
+        # Registrar intento exitoso
+        attempt = LoginAttempt(
+            email=user.email,
+            ip_address=client_ip,
+            is_successful=True
+        )
+        db.add(attempt)
+        
+        # Crear sesión
+        session = UserSession(
+            user_id=user.id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            device_info=None,
+            ip_address=client_ip,
+            expires_at=datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+        db.add(session)
+        
+        # Commit una sola vez
+        db.commit()
+        
+        return access_token, refresh_token
+    
+    @staticmethod
     def create_token(user: User) -> str:
         """Crea un token JWT para el usuario"""
         return create_access_token(data={"sub": user.email})
