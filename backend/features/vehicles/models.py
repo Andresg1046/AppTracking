@@ -39,6 +39,9 @@ class Vehicle(Base):
     assigned_user = relationship("User", foreign_keys=[assigned_user_id], back_populates="assigned_vehicles")
     assigned_by_user = relationship("User", foreign_keys=[assigned_by], back_populates="vehicles_assigned_by_me")
     creator = relationship("User", foreign_keys=[created_by], back_populates="vehicles_created")
+    
+    # Relación con conductor asignado
+    assigned_driver = relationship("Driver", back_populates="vehicle", uselist=False)
 
     def __repr__(self):
         return f"<Vehicle(id={self.id}, plate='{self.plate}', brand='{self.brand}', model='{self.model}')>"

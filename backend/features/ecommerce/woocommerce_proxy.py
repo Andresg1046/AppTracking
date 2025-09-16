@@ -244,6 +244,7 @@ class WooCommerceProxy:
             
             # Crear orden temporal en WooCommerce
             response = await self._make_request("POST", "/orders", json=temp_order_data)
+            response = await self._make_request("POST", "/orders", json=temp_order_data)
             
             # Extraer los totales calculados por WooCommerce
             subtotal = float(response.get("total", 0)) - float(response.get("shipping_total", 0)) - float(response.get("total_tax", 0))
@@ -316,9 +317,41 @@ class WooCommerceProxy:
                 "value": order_data.location_type
             })
         
+        # Agregar información de la app móvil
+        meta_data.extend([
+            {
+                "key": "_app_source",
+                "value": "mobile_app"
+            },
+            {
+                "key": "_app_version",
+                "value": "1.0"
+            },
+            {
+                "key": "_created_via",
+                "value": "mobile_checkout"
+            }
+        ])
+        
+        # Simular que la orden viene de la web para Print Manager
+        # Print Manager ya está configurado en WordPress con su API key
+        # Solo necesitamos que la orden parezca que viene de la web
+        
         # Agregar meta data existente si hay
         if order_data.meta_data:
             meta_data.extend(order_data.meta_data)
+        
+        # Preparar datos de envío
+        shipping_data = None
+        if order_data.store_pickup:
+            # Para Store Pickup, usar datos de facturación como envío
+            shipping_data = order_data.billing.dict()
+            shipping_data["first_name"] = f"{order_data.billing.first_name} (PICKUP)"
+            shipping_data["last_name"] = f"{order_data.billing.last_name} (PICKUP)"
+        elif order_data.shipping:
+            shipping_data = order_data.shipping.dict()
+        else:
+            shipping_data = order_data.billing.dict()
         
         # Preparar datos para WooCommerce
         wc_order_data = {
@@ -326,14 +359,19 @@ class WooCommerceProxy:
             "payment_method_title": order_data.payment_method_title,
             "set_paid": order_data.set_paid,
             "billing": order_data.billing.dict(),
-            "shipping": order_data.shipping.dict() if order_data.shipping else order_data.billing.dict(),
+            "shipping": shipping_data,
             "line_items": order_data.line_items,
             "shipping_lines": order_data.shipping_lines or [],
             "coupon_lines": order_data.coupon_lines or [],
-            "meta_data": meta_data
+            "meta_data": meta_data,
+            # Campos adicionales para compatibilidad con plugins
+            "customer_note": f"Orden creada desde app móvil{' - Store Pickup' if order_data.store_pickup else ''}",
+            "status": "pending"
         }
         
+        logger.info(f"Creating WooCommerce order with data: {wc_order_data}")
         response = await self._make_request("POST", "/orders", json=wc_order_data)
+        logger.info(f"WooCommerce order created successfully: {response['id']}")
         
         # Obtener tracking info si está disponible
         tracking_info = await self._get_tracking_info(response["id"])
@@ -540,3 +578,312 @@ class WooCommerceProxy:
         """Obtener categorías de productos desde WooCommerce"""
         response = await self._make_request("GET", "/products/categories")
         return response
+    
+    # === CONFIGURACIÓN DE ENVÍO ===
+    async def get_shipping_zones(self) -> List[Dict[str, Any]]:
+        """Obtener zonas de envío de WooCommerce"""
+        try:
+            response = await self._make_request("GET", "/shipping/zones")
+            return response
+        except Exception as e:
+            logger.error(f"Error getting shipping zones: {str(e)}")
+            return []
+    
+    async def get_shipping_zone_methods(self, zone_id: int) -> List[Dict[str, Any]]:
+        """Obtener métodos de envío de una zona específica"""
+        try:
+            response = await self._make_request("GET", f"/shipping/zones/{zone_id}/methods")
+            return response
+        except Exception as e:
+            logger.error(f"Error getting shipping zone methods: {str(e)}")
+            return []
+    
+    async def get_shipping_method(self, zone_id: int, method_id: int) -> Dict[str, Any]:
+        """Obtener configuración de un método de envío específico"""
+        try:
+            response = await self._make_request("GET", f"/shipping/zones/{zone_id}/methods/{method_id}")
+            return response
+        except Exception as e:
+            logger.error(f"Error getting shipping method: {str(e)}")
+            return {}
+    
+    async def get_all_shipping_methods(self) -> Dict[str, Any]:
+        """Obtener todos los métodos de envío configurados en WooCommerce"""
+        try:
+            shipping_config = {
+                "zones": [],
+                "methods": {},
+                "settings": {}
+            }
+            
+            # Obtener zonas de envío
+            zones = await self.get_shipping_zones()
+            
+            for zone in zones:
+                zone_id = zone.get("id")
+                zone_name = zone.get("name", "Unknown Zone")
+                
+                # Obtener métodos de cada zona
+                methods = await self.get_shipping_zone_methods(zone_id)
+                
+                zone_info = {
+                    "id": zone_id,
+                    "name": zone_name,
+                    "locations": zone.get("locations", []),
+                    "methods": []
+                }
+                
+                for method in methods:
+                    method_id = method.get("id")
+                    method_data = await self.get_shipping_method(zone_id, method_id)
+                    
+                    method_info = {
+                        "id": method_id,
+                        "method_id": method.get("method_id"),
+                        "title": method.get("title", ""),
+                        "enabled": method.get("enabled", False),
+                        "order": method.get("order", 0),
+                        "settings": method_data.get("settings", {}),
+                        "cost": method_data.get("settings", {}).get("cost", "0"),
+                        "tax_status": method_data.get("settings", {}).get("tax_status", "taxable")
+                    }
+                    
+                    zone_info["methods"].append(method_info)
+                    shipping_config["methods"][f"{method.get('method_id')}_{zone_id}"] = method_info
+                
+                shipping_config["zones"].append(zone_info)
+            
+            return shipping_config
+            
+        except Exception as e:
+            logger.error(f"Error getting all shipping methods: {str(e)}")
+            return {"zones": [], "methods": {}, "settings": {}}
+    
+    # === CONFIGURACIÓN DE IMPUESTOS ===
+    async def get_tax_settings(self) -> Dict[str, Any]:
+        """Obtener configuración de impuestos de WooCommerce"""
+        try:
+            # WooCommerce no tiene endpoint directo para tax settings
+            # Pero podemos obtener información de órdenes para inferir configuración
+            response = await self._make_request("GET", "/orders", params={"per_page": 1})
+            
+            if response:
+                # Analizar una orden para obtener información de impuestos
+                order = response[0] if response else {}
+                return {
+                    "tax_inclusive": order.get("prices_include_tax", False),
+                    "currency": order.get("currency", "USD"),
+                    "tax_lines": order.get("tax_lines", [])
+                }
+            
+            return {"tax_inclusive": False, "currency": "USD", "tax_lines": []}
+            
+        except Exception as e:
+            logger.error(f"Error getting tax settings: {str(e)}")
+            return {"tax_inclusive": False, "currency": "USD", "tax_lines": []}
+    
+    # === CARRITO DE WOOCOMMERCE ===
+    async def get_cart(self) -> Dict[str, Any]:
+        """Obtener carrito de WooCommerce existente usando sesión"""
+        try:
+            # WooCommerce maneja el carrito por sesión
+            # Usar endpoint de carrito de WooCommerce si está disponible
+            try:
+                # Intentar obtener carrito usando endpoint de WooCommerce
+                cart_response = await self._make_request("GET", "/cart")
+                return cart_response
+            except Exception as e:
+                logger.warning(f"WooCommerce cart endpoint not available: {str(e)}")
+                
+                # Fallback: usar información de sesión o retornar carrito vacío
+                return {
+                    "items": [],
+                    "subtotal": 0.0,
+                    "tax_total": 0.0,
+                    "shipping_total": 0.0,
+                    "total": 0.0,
+                    "item_count": 0
+                }
+        except Exception as e:
+            logger.error(f"Error getting WooCommerce cart: {str(e)}")
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+    
+    async def add_to_cart(self, product_id: int, quantity: int = 1, variation_id: Optional[int] = None) -> Dict[str, Any]:
+        """Añadir producto al carrito de WooCommerce usando endpoint real"""
+        try:
+            # Intentar usar endpoint de carrito de WooCommerce si está disponible
+            try:
+                cart_data = {
+                    "product_id": product_id,
+                    "quantity": quantity
+                }
+                if variation_id:
+                    cart_data["variation_id"] = variation_id
+                
+                # Usar endpoint de WooCommerce para añadir al carrito
+                cart_response = await self._make_request("POST", "/cart/add", json=cart_data)
+                return cart_response
+                
+            except Exception as e:
+                logger.warning(f"WooCommerce cart add endpoint not available: {str(e)}")
+                
+                # Fallback: crear orden temporal para simular carrito
+                return await self._add_to_cart_fallback(product_id, quantity, variation_id)
+                
+        except Exception as e:
+            logger.error(f"Error adding to WooCommerce cart: {str(e)}")
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+    
+    async def _add_to_cart_fallback(self, product_id: int, quantity: int = 1, variation_id: Optional[int] = None) -> Dict[str, Any]:
+        """Fallback: crear orden temporal para simular carrito"""
+        try:
+            # Obtener información del producto real
+            product = await self.get_product(product_id)
+            
+            # Calcular precios
+            price = float(product.price)
+            total = price * quantity
+            
+            # Crear item del carrito
+            cart_item = {
+                "key": f"cart_item_{product_id}_{variation_id or 'simple'}",
+                "product_id": product_id,
+                "variation_id": variation_id,
+                "quantity": quantity,
+                "name": product.name,
+                "price": price,
+                "total": total,
+                "image": product.images[0]["src"] if product.images else None
+            }
+            
+            # Simular carrito con el producto añadido
+            return {
+                "items": [cart_item],
+                "subtotal": total,
+                "tax_total": 0.0,  # Se calculará en checkout
+                "shipping_total": 0.0,  # Se calculará en checkout
+                "total": total,
+                "item_count": quantity
+            }
+        except Exception as e:
+            logger.error(f"Error in cart fallback: {str(e)}")
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+    
+    async def update_cart_item(self, cart_item_key: str, quantity: int) -> Dict[str, Any]:
+        """Actualizar cantidad en carrito de WooCommerce"""
+        try:
+            # WooCommerce no tiene endpoint directo para carrito
+            # Pero podemos simular la operación
+            # Por ahora, retornar estructura básica
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+        except Exception as e:
+            logger.error(f"Error updating WooCommerce cart: {str(e)}")
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+    
+    async def remove_from_cart(self, cart_item_key: str) -> Dict[str, Any]:
+        """Eliminar producto del carrito de WooCommerce"""
+        try:
+            # WooCommerce no tiene endpoint directo para carrito
+            # Pero podemos simular la operación
+            # Por ahora, retornar estructura básica
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+        except Exception as e:
+            logger.error(f"Error removing from WooCommerce cart: {str(e)}")
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+    
+    async def clear_cart(self) -> Dict[str, Any]:
+        """Limpiar carrito de WooCommerce"""
+        try:
+            # WooCommerce no tiene endpoint directo para carrito
+            # Pero podemos simular la operación
+            # Por ahora, retornar estructura básica
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+        except Exception as e:
+            logger.error(f"Error clearing WooCommerce cart: {str(e)}")
+            return {
+                "items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0,
+                "item_count": 0
+            }
+    
+    async def get_cart_totals(self) -> Dict[str, Any]:
+        """Obtener totales del carrito de WooCommerce"""
+        try:
+            # WooCommerce no tiene endpoint directo para carrito
+            # Pero podemos simular la operación
+            # Por ahora, retornar estructura básica
+            return {
+                "cart_items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0
+            }
+        except Exception as e:
+            logger.error(f"Error getting WooCommerce cart totals: {str(e)}")
+            return {
+                "cart_items": [],
+                "subtotal": 0.0,
+                "tax_total": 0.0,
+                "shipping_total": 0.0,
+                "total": 0.0
+            }

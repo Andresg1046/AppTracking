@@ -291,46 +291,22 @@ async def create_payment_intent(
     amount: float,
     currency: str = "usd",
     customer_email: Optional[str] = None,
+    order_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """Crear PaymentIntent para Stripe"""
+    """Crear PaymentIntent para Stripe - TEMPORALMENTE DESHABILITADO"""
     try:
-        import stripe
-        import os
+        # Stripe se configurará cuando esté listo para probar pagos
+        logger.info("PaymentIntent temporalmente deshabilitado - se configurará cuando esté listo para probar pagos")
         
-        # Configurar Stripe según el modo
-        stripe_mode = os.getenv("STRIPE_MODE", "test")
-        
-        if stripe_mode == "test":
-            stripe.api_key = os.getenv("STRIPE_TEST_SECRET_KEY")
-        else:
-            stripe.api_key = os.getenv("STRIPE_LIVE_SECRET_KEY")
-        
-        if not stripe.api_key:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Stripe no configurado para modo {stripe_mode}"
-            )
-        
-        # Crear PaymentIntent
-        metadata = {
-            "app_source": "mobile"
-        }
-        
-        if customer_email:
-            metadata["customer_email"] = customer_email
-        
-        intent = stripe.PaymentIntent.create(
-            amount=int(amount * 100),  # Convertir a centavos
-            currency=currency,
-            metadata=metadata
-        )
-        
+        # Simular PaymentIntent
         return {
-            "client_secret": intent.client_secret,
-            "payment_intent_id": intent.id,
+            "client_secret": "temp_client_secret",
+            "payment_intent_id": f"temp_pi_{order_id or 'test'}",
             "amount": amount,
-            "currency": currency
+            "currency": currency,
+            "status": "requires_payment_method",
+            "note": "Stripe temporalmente deshabilitado - se configurará cuando esté listo para probar pagos"
         }
         
     except Exception as e:
@@ -338,6 +314,222 @@ async def create_payment_intent(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al crear PaymentIntent: {str(e)}"
+        )
+
+@proxy_router.post("/confirm-payment-intent")
+async def confirm_payment_intent(
+    payment_intent_id: str,
+    order_id: int,
+    db: Session = Depends(get_db)
+):
+    """Confirmar PaymentIntent y actualizar orden en WooCommerce - TEMPORALMENTE DESHABILITADO"""
+    try:
+        # Stripe se configurará cuando esté listo para probar pagos
+        logger.info("Confirmación de PaymentIntent temporalmente deshabilitada - se configurará cuando esté listo para probar pagos")
+        
+        # Simular confirmación de pago
+        from features.ecommerce.schemas import PaymentConfirm
+        from datetime import datetime
+        
+        payment_data = PaymentConfirm(
+            transaction_id=f"temp_txn_{order_id}",
+            status="processing",
+            date_paid=datetime.now(),
+            payment_method="stripe",
+            payment_method_title="Credit Card (Stripe) - Test Mode"
+        )
+        
+        order = await woo_proxy.confirm_payment(order_id, payment_data)
+        
+        return {
+            "success": True,
+            "order": order,
+            "payment_intent_status": "succeeded",
+            "note": "Stripe temporalmente deshabilitado - se configurará cuando esté listo para probar pagos"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error confirming payment intent: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al confirmar pago: {str(e)}"
+        )
+
+# === PRINT MANAGER - INTEGRACIÓN SIMPLE ===
+
+@proxy_router.get("/print-manager/status")
+async def check_print_manager_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Verificar si Print Manager está activo y configurado
+    
+    - Simple verificación de que Print Manager funciona
+    - No necesita configuración adicional
+    """
+    try:
+        # Obtener órdenes recientes para verificar que Print Manager funciona
+        recent_orders = await woo_proxy._make_request("GET", "/orders", params={
+            "per_page": 3,
+            "orderby": "date",
+            "order": "desc"
+        })
+        
+        return {
+            "print_manager_status": "active",
+            "message": "Print Manager está configurado en WordPress con su API key",
+            "mobile_orders_will_print": True,
+            "recent_orders": [
+                {
+                    "id": order["id"],
+                    "status": order["status"],
+                    "date_created": order["date_created"]
+                }
+                for order in recent_orders
+            ],
+            "note": "Las órdenes móviles se imprimirán automáticamente usando Print Manager"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking Print Manager status: {str(e)}")
+        return {
+            "print_manager_status": "error",
+            "error": str(e),
+            "message": "Could not verify Print Manager status"
+        }
+
+# === VERIFICACIÓN DE ÓRDENES ===
+
+@proxy_router.get("/orders/{order_id}/verify")
+async def verify_order_in_woocommerce(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Verificar que una orden existe en WooCommerce y obtener detalles completos
+    
+    - Útil para debugging y verificar integración
+    - Muestra todos los campos de la orden
+    - Incluye meta_data para plugins
+    """
+    try:
+        order = await woo_proxy.get_order(order_id)
+        
+        # Obtener información adicional de WooCommerce
+        wc_order_raw = await woo_proxy._make_request("GET", f"/orders/{order_id}")
+        
+        return {
+            "order_exists": True,
+            "order_id": order_id,
+            "order_summary": {
+                "id": order.id,
+                "status": order.status,
+                "total": order.total,
+                "payment_method": order.payment_method,
+                "date_created": order.date_created,
+                "billing": order.billing,
+                "shipping": order.shipping
+            },
+            "woocommerce_details": {
+                "raw_data": wc_order_raw,
+                "meta_data": wc_order_raw.get("meta_data", []),
+                "line_items": wc_order_raw.get("line_items", []),
+                "shipping_lines": wc_order_raw.get("shipping_lines", []),
+                "tax_lines": wc_order_raw.get("tax_lines", []),
+                "customer_note": wc_order_raw.get("customer_note", "")
+            },
+            "plugin_compatibility": {
+                "has_app_source": any(meta.get("key") == "_app_source" for meta in wc_order_raw.get("meta_data", [])),
+                "has_store_pickup": any(meta.get("key") == "_store_pickup" for meta in wc_order_raw.get("meta_data", [])),
+                "has_delivery_date": any(meta.get("key") == "_delivery_date" for meta in wc_order_raw.get("meta_data", [])),
+                "has_message_card": any(meta.get("key") == "_message_card" for meta in wc_order_raw.get("meta_data", []))
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error verifying order {order_id}: {str(e)}")
+        return {
+            "order_exists": False,
+            "order_id": order_id,
+            "error": str(e),
+            "message": "Order not found or error accessing WooCommerce"
+        }
+
+@proxy_router.get("/orders/recent")
+async def get_recent_orders(
+    limit: int = Query(5, ge=1, le=20, description="Número de órdenes recientes"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener órdenes recientes de WooCommerce
+    
+    - Útil para verificar que las órdenes se están creando
+    - Muestra órdenes creadas desde la app móvil
+    """
+    try:
+        # Obtener órdenes recientes
+        recent_orders = await woo_proxy._make_request("GET", "/orders", params={
+            "per_page": limit,
+            "orderby": "date",
+            "order": "desc"
+        })
+        
+        # Filtrar órdenes creadas desde la app móvil
+        mobile_orders = []
+        for order in recent_orders:
+            meta_data = order.get("meta_data", [])
+            is_mobile_order = any(
+                meta.get("key") == "_app_source" and meta.get("value") == "mobile_app"
+                for meta in meta_data
+            )
+            
+            if is_mobile_order:
+                mobile_orders.append({
+                    "id": order["id"],
+                    "status": order["status"],
+                    "total": order["total"],
+                    "payment_method": order["payment_method"],
+                    "date_created": order["date_created"],
+                    "customer_note": order.get("customer_note", ""),
+                    "is_store_pickup": any(
+                        meta.get("key") == "_store_pickup" and meta.get("value") == "yes"
+                        for meta in meta_data
+                    ),
+                    "delivery_date": next(
+                        (meta.get("value") for meta in meta_data if meta.get("key") == "_delivery_date"),
+                        None
+                    )
+                })
+        
+        return {
+            "total_recent_orders": len(recent_orders),
+            "mobile_orders": mobile_orders,
+            "mobile_orders_count": len(mobile_orders),
+            "all_recent_orders": [
+                {
+                    "id": order["id"],
+                    "status": order["status"],
+                    "total": order["total"],
+                    "date_created": order["date_created"],
+                    "is_mobile": any(
+                        meta.get("key") == "_app_source" and meta.get("value") == "mobile_app"
+                        for meta in order.get("meta_data", [])
+                    )
+                }
+                for order in recent_orders
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting recent orders: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al obtener órdenes recientes: {str(e)}"
         )
 
 # === WEBHOOKS ===

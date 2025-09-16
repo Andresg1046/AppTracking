@@ -8,7 +8,8 @@ from features.users.models import User
 from features.roles.models import Role
 from features.auth.models import PasswordReset, LoginAttempt
 from features.vehicles.models import Vehicle
-# No necesitamos modelos de e-commerce para el enfoque proxy
+from features.tracking.models import Driver, DeliveryTracking, LocationUpdate, DriverSession
+from features.ecommerce.models import Order, OrderItem, Cart, CartItem
 from core.security import get_password_hash
 import logging
 

@@ -8,6 +8,12 @@ from features.users.routes import users_router
 from features.roles.routes import roles_router
 from features.vehicles.routes import vehicles_router
 from features.ecommerce.proxy_routes import proxy_router as ecommerce_router
+from features.ecommerce.checkout_routes import checkout_router
+from features.ecommerce.tax_routes import tax_router
+from features.ecommerce.shipping_routes import shipping_router
+from features.ecommerce.woocommerce_cart_routes import woocommerce_cart_router
+from features.ecommerce.test_woocommerce_routes import test_woocommerce_router
+from features.tracking.routes import tracking_router
 
 # Crear aplicación FastAPI
 app = FastAPI(title="Vehicle Tracking API", version="1.0.0")
@@ -35,6 +41,12 @@ app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(roles_router, prefix="/roles", tags=["Roles"])
 app.include_router(vehicles_router, prefix="/vehicles", tags=["Vehicles"])
 app.include_router(ecommerce_router, prefix="/ecommerce", tags=["E-commerce"])
+app.include_router(checkout_router, prefix="/checkout", tags=["Checkout"])
+app.include_router(tax_router, prefix="/tax", tags=["Tax"])
+app.include_router(shipping_router, prefix="/shipping", tags=["Shipping"])
+app.include_router(woocommerce_cart_router, prefix="/ecommerce", tags=["WooCommerce Cart"])
+app.include_router(test_woocommerce_router, prefix="/test", tags=["Test WooCommerce"])
+app.include_router(tracking_router, prefix="/tracking", tags=["Tracking"])
 
 # Health check endpoint
 @app.get("/health")

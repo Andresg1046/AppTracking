@@ -26,3 +26,6 @@ class User(Base):
     assigned_vehicles = relationship("Vehicle", foreign_keys="Vehicle.assigned_user_id", back_populates="assigned_user")
     vehicles_assigned_by_me = relationship("Vehicle", foreign_keys="Vehicle.assigned_by", back_populates="assigned_by_user")
     vehicles_created = relationship("Vehicle", foreign_keys="Vehicle.created_by", back_populates="creator")
+    
+    # Relación con perfil de conductor
+    driver_profile = relationship("Driver", back_populates="user", uselist=False)

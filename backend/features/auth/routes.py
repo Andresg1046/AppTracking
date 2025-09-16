@@ -35,7 +35,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @auth_router.post("/login", response_model=TokenResponse)
 def login(user_credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
-    """Inicia sesión de usuario - OPTIMIZADO"""
+    """Inicia sesión de usuario"""
     email = user_credentials.email
     password = user_credentials.password
     
